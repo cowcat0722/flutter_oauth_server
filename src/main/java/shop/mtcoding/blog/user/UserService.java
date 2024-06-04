@@ -91,4 +91,47 @@ public class UserService {
             return JwtUtil.create(returnUser);
         }
     }
+
+    public String 네이버로그인(String naverAccessToken) {
+        // 1. RestTemplate 객체 생성
+        RestTemplate rt = new RestTemplate();
+
+        // 2. 토큰으로 사용자 정보 받기 (PK, Email)
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Content-type", "application/x-www-form-urlencoded;charset=utf-8");
+        headers.add("Authorization", "Bearer "+ naverAccessToken);
+
+        HttpEntity<MultiValueMap<String, String>> request =
+                new HttpEntity<>(headers);
+
+        ResponseEntity<NaverResponse.NaverUserDTO> response = rt.exchange(
+                "https://openapi.naver.com/v1/nid/me",
+                HttpMethod.GET,
+                request,
+                NaverResponse.NaverUserDTO.class);
+
+        System.out.println("토큰으로 받은 리스폰스 : "+response);
+        // 3. 해당정보로 DB조회 (있을수, 없을수)
+        String username = "naver_"+response.getBody().getResponse().getId();
+        System.out.println("유저네임 : "+ username);
+        User userPS = userJPARepository.findByUsername(username)
+                .orElse(null);
+
+        // 4. 있으면? - 조회된 유저정보 리턴
+        if(userPS != null){
+            System.out.println("어 있어? 유저정보 리턴~");
+            return JwtUtil.create(userPS);
+        }else{
+            // 5. 없으면? - 강제 회원가입
+            System.out.println("어 없네? 강제회원가입~");
+            User user = User.builder()
+                    .username(username)
+                    .password(UUID.randomUUID().toString())
+                    .email(response.getBody().getResponse().getEmail())
+                    .provider("naver")
+                    .build();
+            User returnUser = userJPARepository.save(user);
+            return JwtUtil.create(returnUser);
+        }
+    }
 }
